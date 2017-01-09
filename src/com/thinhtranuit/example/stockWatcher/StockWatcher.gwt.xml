@@ -12,4 +12,5 @@
 
     <source path='client'/>
     <source path='shared'/>
+    <source path='server'/>
 </module>

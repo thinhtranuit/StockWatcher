@@ -5,10 +5,12 @@ import com.google.gwt.core.client.GWT;
 import com.google.gwt.event.dom.client.*;
 import com.google.gwt.i18n.client.DateTimeFormat;
 import com.google.gwt.i18n.client.NumberFormat;
-import com.google.gwt.user.client.Random;
 import com.google.gwt.user.client.Timer;
 import com.google.gwt.user.client.Window;
+import com.google.gwt.user.client.rpc.AsyncCallback;
 import com.google.gwt.user.client.ui.*;
+import com.thinhtranuit.example.stockWatcher.server.StockPriceService;
+import com.thinhtranuit.example.stockWatcher.server.StockPriceServiceAsync;
 
 import java.util.ArrayList;
 import java.util.Date;
@@ -27,7 +29,8 @@ public class StockWatcher implements EntryPoint {
     private Button addButton = new Button("ADD");
     private Label timeUpdated = new Label();
     private ArrayList<String> stocks = new ArrayList<>();
-
+    private StockPriceServiceAsync stokServiceAsync = GWT.create(StockPriceService.class);
+    private Label errorMsg = new Label();
     /**
      * This is the entry point method.
      */
@@ -46,6 +49,9 @@ public class StockWatcher implements EntryPoint {
 
         addPanel.add(textBox);
         addPanel.add(addButton);
+        errorMsg.setStyleName("errorMessage");
+        errorMsg.setVisible(false);
+        mainPanel.add(errorMsg);
         mainPanel.add(stockTable);
         mainPanel.add(addPanel);
         mainPanel.add(timeUpdated);
@@ -92,22 +98,27 @@ public class StockWatcher implements EntryPoint {
         stockTable.getCellFormatter().addStyleName(0, 2, "watchListNumericColumn");
         stockTable.getCellFormatter().addStyleName(0, 3, "watchListRemoveColumn");
         addPanel.addStyleName("addPanel");
+        errorMsg.addStyleName("errorMessage");
     }
 
     private void refreshStockList() {
-        final double MAX_PRICE = 100d;
-        final double MAX_PRICE_CHANGE = 0.02;
-        StockPrice[] stockPrices = new StockPrice[stocks.size()];
-        int i = 0;
-        for (String stock : stocks){
-            double price = Random.nextDouble() * MAX_PRICE;
-            double change = price * MAX_PRICE_CHANGE
-                    * (Random.nextDouble() * 2.0 - 1.0);
+        AsyncCallback<StockPrice[]> asyncCallback =  new AsyncCallback<StockPrice[]>() {
+            @Override
+            public void onFailure(Throwable caught) {
+                if (caught instanceof DelistedException){
+                    errorMsg.setVisible(true);
+                    String str = "Error: Company " + ((DelistedException) caught).getSymbol() + " have been deleted";
+                    errorMsg.setText(str);
+                    errorMsg.setVisible(true);
+                }
+            }
 
-            stockPrices[i] = new StockPrice(stock, price, change);
-            i++;
-        }
-        updateTable(stockPrices);
+            @Override
+            public void onSuccess(StockPrice[] result) {
+                updateTable(result);
+            }
+        };
+        stokServiceAsync.getPrices(stocks.toArray(new String[0]), asyncCallback);
     }
 
     private void updateTable(StockPrice[] stockPrices) {
@@ -141,6 +152,9 @@ public class StockWatcher implements EntryPoint {
                 DateTimeFormat.PredefinedFormat.DATE_TIME_MEDIUM);
         timeUpdated.setText("Last update : "
                 + dateFormat.format(new Date()));
+
+        //clear any error
+        errorMsg.setVisible(false);
     }
 
     /**
